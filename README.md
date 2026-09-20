@@ -1,2 +1,4 @@
 # IoT-Based-Smart-Gardening-System
-I designed and implemented IoT-based system integrating environmental sensors, a system that incorporates an ESP32 microcontroller, irrigation components for real-time garden monitoring. Integrated soil-moisture sensors, a microcontroller, and irrigation components; programmed the controller to process sensor readings and activate irrigation based 
+Designed and implemented an IoT-based smart gardening system integrating environmental sensors, microcontroller control, and automated irrigation.
+Programmed sensor-based monitoring and automatic irrigation based on soil-moisture conditions.
+Tested the prototype under varying environmental conditions to validate system functionality and reliability.
