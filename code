@@ -1,0 +1,170 @@
+
+#include <Arduino.h>
+#include <Adafruit_Sensor.h>
+#include <ESP32Servo.h>
+#include <DHT.h>
+#include <NewPing.h>
+
+#define trigPin 18
+#define echoPin 21
+#define dhtPin 27
+#define servoPin 25
+int max_distance = 50;
+
+NewPing sonar(trigPin, echoPin, max_distance);
+Servo servo;
+DHT dht(dhtPin, DHT11);
+
+
+#define soilMoisture 34
+#define pumpWater 23
+
+#define BLYNK_TEMPLATE_ID "TMPL2-mN6eazf"
+#define BLYNK_TEMPLATE_NAME "Smart Garden System"
+#define BLYNK_AUTH_TOKEN "V5E1flVBbfz2Z59CBRegW1G04OuZ_Xso"
+
+
+#define BLYNK_PRINT Serial
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+// WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "itel P15";
+char pass[] = "ibmoni/dolla";         
+
+int scale_moisture_value;
+int scale_waterlevel_value;
+int containerHeight = 22; //(in cm)
+int moistureSensor;
+int distance, waterLevel;
+float temperature, humidity;
+int dry = 30;
+int wet = 70;
+int pump;
+bool pumpAlert;
+
+BlynkTimer timer;
+
+
+void water_level_sensor() {
+              //Measurement of height of water in a tank...
+  distance = sonar.ping_cm();
+  waterLevel = containerHeight - distance;
+  scale_waterlevel_value = map(waterLevel, 0, containerHeight, 0, 100);           //in percentage...
+  Serial.print("waterLevel is ");
+  Serial.print(waterLevel);
+  Serial.print(" - ");
+  Serial.print(scale_waterlevel_value);
+  Serial.println("%");
+}
+
+
+void temp_and_humid_sensor(){
+
+                    //Measuring the temperature and humidity of the environment using DHT11 sensor...
+  humidity = dht.readHumidity(); 
+  temperature = dht.readTemperature();
+  
+  if (isnan(humidity) || isnan(temperature)) {
+   
+    return;
+  }
+
+  Serial.print("temperaure is ");
+  Serial.println(temperature);
+  Serial.print("humidity is ");
+  Serial.println(humidity);
+
+}
+
+
+void sprayWater() {
+  digitalWrite(pumpWater, HIGH);      //Switch ON the water pump...
+  pump = 1;
+  if (pumpAlert)
+  {
+    Blynk.virtualWrite(V0, pump);
+    pumpAlert = false;
+  }
+  Serial.print("Soil moisture value : ");
+  Serial.print(moistureSensor);
+  Serial.print(" - ");
+  Serial.println(scale_moisture_value);
+    
+  for (int i = 30; i <= 150; i+=3)
+  {
+    servo.write(i);
+    delay(20);
+  }
+
+  for (int i = 150; i >= 30; i-=3)
+  {
+    servo.write(i);
+    delay(20);
+  }
+  
+}
+
+void stopSprayingWater() { 
+  digitalWrite(pumpWater, LOW);           //Switch OFF the water pump...
+  pump = 0;
+  servo.write(30);          //Stop the water pump from spraying water...
+  if (!pumpAlert)
+  {
+    
+    Blynk.virtualWrite(V0, pump);
+    pumpAlert = true;
+  }
+  Serial.print("Soil moisture value : ");
+  Serial.print(moistureSensor);
+  Serial.print(" - ");
+  Serial.println(scale_moisture_value);
+  
+}
+
+void soil_moisture_sensor(){
+  
+                  //Soil moisture sensor for detecting soil moisture content...
+  moistureSensor = analogRead(soilMoisture);
+  scale_moisture_value = map(moistureSensor, 4095, 850, 0, 100);              //in percentage...
+    
+  if(scale_moisture_value >= wet){
+    stopSprayingWater();
+  }
+
+  if (scale_moisture_value <= dry)
+  {
+    sprayWater();
+  }
+     
+} 
+
+void monitoringDatas(){
+    //Send these data to cloud(blynk server)...
+  water_level_sensor();
+  temp_and_humid_sensor();
+  soil_moisture_sensor();
+  Blynk.virtualWrite(V1, scale_waterlevel_value); 
+  Blynk.virtualWrite(V2, temperature);
+  Blynk.virtualWrite(V3, humidity);
+  Blynk.virtualWrite(V4, scale_moisture_value);
+}
+
+
+void setup() {
+  Serial.begin(9600);
+  pumpAlert = true;
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  pinMode(pumpWater, OUTPUT);
+  pinMode(soilMoisture, INPUT);
+  dht.begin();
+  servo.attach(servoPin);
+  timer.setInterval(500L, monitoringDatas);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
